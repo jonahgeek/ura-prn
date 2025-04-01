@@ -1,12 +1,33 @@
 {
   "name": "loan-math",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "1.0.1",
+  "main": "build/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "clean": "rm -rf build",
+    "build": "npm run clean && tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "jest"
   },
-  "keywords": [],
-  "author": "",
+  "files": [
+    "build/*.js",
+    "build/*.js.map",
+    "build/*.d.ts",
+    "CONTRIBUTING.md",
+    "README.md"
+  ],
+  "keywords": [
+    "loan",
+    "math",
+    "calculator",
+    "typescript"
+  ],
+  "author": "Jonahgeek",
   "license": "ISC",
-  "description": ""
+  "description": "A TypeScript package to perform loan-related mathematical calculations such as calculating the remaining days until loan expiry.",
+  "devDependencies": {
+    "ts-jest": "^29.3.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
 }
