@@ -1,3 +1,9 @@
+interface Payment {
+  status: "PENDING" | "PAID" | "IN_REVIEW"; // Payment status options
+  installmentNumber: number; // The installment number of the payment
+  interestDue: number; // The interest amount due for the payment
+}
+
 function daysToExpiry(dateExpected: Date): number {
   // Get the current date
   const currentDate = new Date();
@@ -29,4 +35,24 @@ function lateDays(
   return Math.max(lateDays, 0);
 }
 
-export { daysToExpiry, lateDays };
+function interestDue(payments: Payment[], currentInstallment: number): number {
+  // Initialize total interest due to 0
+  let totalInterestDue = 0;
+
+  // Iterate through each payment in the payments array
+  for (const payment of payments) {
+    // Check if the payment status is 'PENDING' and installment number is less than or equal to current installment
+    if (
+      payment.status === "PENDING" &&
+      payment.installmentNumber <= currentInstallment
+    ) {
+      // Add the interestDue of the current payment to the total
+      totalInterestDue += payment.interestDue;
+    }
+  }
+
+  // Return the total interest due
+  return totalInterestDue;
+}
+
+export { daysToExpiry, lateDays, interestDue };
