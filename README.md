@@ -81,6 +81,66 @@ console.log(`Total interest due: ${totalInterest}`);
 
 ---
 
+### 4. `paymentSchedule`
+
+Generates a detailed payment schedule based on the loan's payment method. It supports two methods: `DECLINING_BALANCE` and `INTEREST_ONLY`.
+
+#### Usage
+
+```javascript
+const { paymentSchedule } = require('loan-math');
+
+const monthlyRate = 5;  // 5% interest rate
+const period = 12;  // 12 months
+const monthlyDeposit = 500;  // Monthly deposit amount
+const principal = 5000;  // Principal loan amount
+const paymentMethod = 'DECLINING_BALANCE';  // Payment method
+
+const scheduleResult = paymentSchedule(monthlyRate, period, monthlyDeposit, principal, paymentMethod);
+
+console.log(scheduleResult.schedule);  // Logs the full payment schedule
+console.log(`Total Payable: ${scheduleResult.totalPayable}`);
+console.log(`Principal Payable: ${scheduleResult.principalPayable}`);
+console.log(`Interest Charged: ${scheduleResult.interestCharged}`);
+```
+
+#### Parameters:
+- `monthlyRate: number`: The monthly interest rate as a percentage (e.g., for 5% monthly rate, pass `5`).
+- `period: number`: The total number of months (loan term).
+- `monthlyDeposit: number`: The amount paid monthly (not applicable for interest-only payments, but used in declining balance).
+- `principal: number`: The total principal loan amount.
+- `paymentMethod: 'DECLINING_BALANCE' | 'INTEREST_ONLY'`: The method for calculating payments. Choose between:
+  - `'DECLINING_BALANCE'`: Monthly payment decreases as the principal is paid off.
+  - `'INTEREST_ONLY'`: Only interest is paid each month, and the principal is repaid in full in the final installment.
+
+#### Returns:
+- An object containing:
+  - `schedule`: An array of payment installments, each including `installmentNumber`, `installmentAmount`, `principalDue`, `interestDue`, `balance`, `status`, and `dateExpected`.
+  - `totalPayable`: The total amount to be paid, including principal and interest.
+  - `principalPayable`: The original loan principal.
+  - `interestCharged`: The total interest charged over the course of the loan.
+
+#### Example Output:
+```json
+{
+  "schedule": [
+    {
+      "installmentNumber": 1,
+      "installmentAmount": 500,
+      "principalDue": 400,
+      "interestDue": 100,
+      "balance": 4500,
+      "status": "PENDING",
+      "dateExpected": "2025-05-01T00:00:00.000Z"
+    },
+    // Additional installments...
+  ],
+  "totalPayable": 6000,
+  "principalPayable": 5000,
+  "interestCharged": 1000
+}
+```
+
 ## Installation
 
 You can install the `loan-math` package via npm:
