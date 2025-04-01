@@ -33,3 +33,14 @@
 - Edge cases, such as handling remaining balance in the last installment, are addressed.
   
 ## [1.0.3] - 2025-04-01
+
+### Added
+- Added support for calculating the **loan term** based on the loan amount, interest rate, monthly payment, and payment method (`DECLINING_BALANCE` or `INTEREST_ONLY`).
+  - The `term` function calculates how many months it will take to pay off the loan under the given conditions.
+  - **Validation** is included to ensure that all inputs are valid, such as ensuring the monthly payment is greater than the interest payment for the `INTEREST_ONLY` method.
+  - Added error handling to prevent infinite loops in cases where the loan payment is insufficient to cover the interest.
+  - Supports two payment methods:
+    - **DECLINING_BALANCE**: Principal decreases faster as payments are made, with interest recalculated on the remaining balance each month.
+    - **INTEREST_ONLY**: Monthly payments cover only interest until the balance is paid off in the final installment.
+
+## [1.0.0] - 2025-04-01

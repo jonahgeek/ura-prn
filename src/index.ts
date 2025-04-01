@@ -251,4 +251,92 @@ function paymentSchedule(
   return null;
 }
 
-export { daysToExpiry, lateDays, interestDue, paymentSchedule };
+function validateCalculateTermInputs(
+  amount: number,
+  interestRate: number,
+  monthlyPayment: number,
+  paymentMethod: PaymentMethod
+): boolean {
+  if (isNaN(amount) || amount <= 0) {
+    console.error("Invalid loan amount.");
+    return false;
+  }
+  if (isNaN(interestRate) || interestRate <= 0) {
+    console.error("Invalid interest rate.");
+    return false;
+  }
+  if (isNaN(monthlyPayment) || monthlyPayment <= 0) {
+    console.error("Invalid monthly payment.");
+    return false;
+  }
+  if (!["DECLINING_BALANCE", "INTEREST_ONLY"].includes(paymentMethod)) {
+    console.error(
+      'Invalid payment method. Use "DECLINING_BALANCE" or "INTEREST_ONLY".'
+    );
+    return false;
+  }
+  return true;
+}
+
+function term(
+  amount: number,
+  interestRate: number,
+  monthlyPayment: number,
+  paymentMethod: PaymentMethod
+): number {
+  if (
+    !validateCalculateTermInputs(
+      amount,
+      interestRate,
+      monthlyPayment,
+      paymentMethod
+    )
+  ) {
+    throw new Error("Invalid inputs provided.");
+  }
+
+  const monthlyInterestRate = interestRate / 100;
+  let balance = amount;
+  let term = 0;
+
+  if (paymentMethod === "DECLINING_BALANCE") {
+    while (balance > 0) {
+      const interest = balance * monthlyInterestRate;
+      const payment = Math.min(monthlyPayment, balance + interest);
+      balance -= payment - interest;
+      term++;
+
+      if (balance <= 0) break;
+    }
+  } else if (paymentMethod === "INTEREST_ONLY") {
+    const interestPayment = amount * monthlyInterestRate;
+
+    if (monthlyPayment <= interestPayment) {
+      // If the monthly payment is less than or equal to the interest payment,
+      // the balance will never decrease, leading to an infinite term.
+      throw new Error(
+        "Monthly payment must be greater than the interest payment for INTEREST_ONLY method."
+      );
+    } else {
+      // Calculate how many payments will be needed to pay off the interest
+      // and then the principal with whatever is left from the monthly payment.
+      while (balance > 0) {
+        if (monthlyPayment > interestPayment) {
+          // Apply the remainder of the monthly payment towards the principal
+          balance -= monthlyPayment - interestPayment;
+          term++;
+        }
+
+        if (balance <= 0) break;
+      }
+    }
+  } else {
+    throw new Error(
+      "Invalid payment method. Use 'DECLINING_BALANCE' or 'INTEREST_ONLY'."
+    );
+  }
+
+  return term;
+}
+
+export { daysToExpiry, lateDays, interestDue, paymentSchedule, term };
