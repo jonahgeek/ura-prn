@@ -1,342 +1,132 @@
-interface Payment {
-  status: "PENDING" | "PAID" | "IN_REVIEW"; // Payment status options
-  installmentNumber: number; // The installment number of the payment
-  interestDue: number; // The interest amount due for the payment
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import forge from 'node-forge';
+
+export interface URAPrnConfig {
+  certPath: string;
+  pfxPath: string;
+  keystorePassword: string;
+  alias?: string;
 }
 
-interface PaymentScheduleEntry {
-  installmentNumber: number;
-  installmentAmount: number | string;
-  principalDue: number;
-  interestDue: number;
-  balance: number;
-  status: string;
-  dateExpected: Date;
+/**
+ * URA Error Codes and Descriptions
+ */
+export const URAError = {
+  CERTIFICATE_LOAD_ERROR: {
+    code: 'URA001',
+    message: 'Failed to load or parse the certificate file.',
+  },
+  ENCRYPTION_FAILED: {
+    code: 'URA002',
+    message: 'Failed to encrypt the provided plaintext.',
+  },
+  KEYSTORE_LOAD_ERROR: {
+    code: 'URA003',
+    message: 'Failed to load or parse the PFX keystore.',
+  },
+  PRIVATE_KEY_NOT_FOUND: {
+    code: 'URA004',
+    message: 'Private key not found in keystore.',
+  },
+  SIGNATURE_FAILED: {
+    code: 'URA005',
+    message: 'Failed to generate digital signature.',
+  },
+} as const;
+
+type URAErrorCode = keyof typeof URAError;
+
+class URAPrnError extends Error {
+  public code: string;
+  constructor(code: URAErrorCode, extra?: string) {
+    super(`${URAError[code].message}${extra ? ' - ' + extra : ''}`);
+    this.code = URAError[code].code;
+    this.name = 'URAPrnError';
+  }
 }
 
-interface PaymentScheduleResult {
-  schedule: PaymentScheduleEntry[];
-  totalPayable: number;
-  principalPayable: number;
-  interestCharged: number;
-}
+/**
+ * Main URAPrn utility class
+ */
+export class URAPrn {
+  private certPath: string;
+  private pfxPath: string;
+  private keystorePassword: string;
+  private alias?: string;
 
-type PaymentMethod = "DECLINING_BALANCE" | "INTEREST_ONLY";
-
-function daysToExpiry(dateExpected: Date): number {
-  // Get the current date
-  const currentDate = new Date();
-
-  // Calculate the difference in milliseconds between the two dates
-  const differenceMs = dateExpected.getTime() - currentDate.getTime();
-
-  // Convert milliseconds to days
-  const remainingDays = Math.ceil(differenceMs / (1000 * 60 * 60 * 24));
-
-  return remainingDays;
-}
-
-function lateDays(
-  dateReceived: string | Date,
-  dateExpected: string | Date
-): number {
-  // Ensure both dates are converted to Date objects
-  const expected = new Date(dateExpected);
-  const received = new Date(dateReceived);
-
-  // Calculate the difference in milliseconds between the expected and received dates
-  const differenceMs = received.getTime() - expected.getTime();
-
-  // Convert milliseconds to days
-  const lateDays = Math.ceil(differenceMs / (1000 * 60 * 60 * 24));
-
-  // Return the number of late days, ensuring it's not negative
-  return Math.max(lateDays, 0);
-}
-
-function interestDue(payments: Payment[], currentInstallment: number): number {
-  // Initialize total interest due to 0
-  let totalInterestDue = 0;
-
-  // Iterate through each payment in the payments array
-  for (const payment of payments) {
-    // Check if the payment status is 'PENDING' and installment number is less than or equal to current installment
-    if (
-      payment.status === "PENDING" &&
-      payment.installmentNumber <= currentInstallment
-    ) {
-      // Add the interestDue of the current payment to the total
-      totalInterestDue += payment.interestDue;
-    }
+  constructor(config: URAPrnConfig) {
+    this.certPath = config.certPath;
+    this.pfxPath = config.pfxPath;
+    this.keystorePassword = config.keystorePassword;
+    this.alias = config.alias;
   }
 
-  // Return the total interest due
-  return totalInterestDue;
-}
+  encrypt(plainText: string): string {
+    try {
+      const certPem = fs.readFileSync(path.resolve(this.certPath), 'utf8');
+      const cert = forge.pki.certificateFromPem(certPem);
+      const publicKeyPem = forge.pki.publicKeyToPem(cert.publicKey);
 
-function validatePaymentScheduleInputs(
-  monthlyRate: number,
-  period: number,
-  monthlyDeposit: number,
-  principal: number,
-  paymentMethod: PaymentMethod
-): boolean {
-  if (isNaN(monthlyRate) || monthlyRate <= 0) {
-    console.error("Invalid monthly rate.");
-    return false;
-  }
-  if (isNaN(period) || period <= 0) {
-    console.error("Invalid period.");
-    return false;
-  }
-  if (isNaN(monthlyDeposit) || monthlyDeposit <= 0) {
-    console.error("Invalid monthly deposit.");
-    return false;
-  }
-  if (isNaN(principal) || principal <= 0) {
-    console.error("Invalid principal amount.");
-    return false;
-  }
-  if (!["DECLINING_BALANCE", "INTEREST_ONLY"].includes(paymentMethod)) {
-    console.error("Invalid payment method.");
-    return false;
-  }
-  return true;
-}
-
-function paymentSchedule(
-  monthlyRate: number,
-  period: number,
-  monthlyDeposit: number,
-  principal: number,
-  paymentMethod: PaymentMethod
-): PaymentScheduleResult | null {
-  if (
-    !validatePaymentScheduleInputs(
-      monthlyRate,
-      period,
-      monthlyDeposit,
-      principal,
-      paymentMethod
-    )
-  ) {
-    return null;
-  }
-
-  let schedule: PaymentScheduleEntry[] = [];
-  let totalPayable = 0;
-  let principalPayable = 0;
-  let interestCharged = 0;
-
-  if (paymentMethod === "DECLINING_BALANCE") {
-    let newPrincipal = principal;
-
-    // Get current date
-    let currentDate = new Date();
-
-    for (let i = 1; i <= period; i++) {
-      let interestDue = Math.round((monthlyRate / 100) * newPrincipal);
-      let balance = newPrincipal + interestDue;
-
-      let expectedDate = new Date(currentDate);
-      expectedDate.setMonth(expectedDate.getMonth() + i);
-
-      schedule.push({
-        installmentNumber: i,
-        installmentAmount: i === 1 ? 0 : Math.round(monthlyDeposit),
-        principalDue: Math.round(newPrincipal),
-        interestDue: interestDue,
-        balance: Math.round(balance),
-        status: "PENDING",
-        dateExpected: expectedDate,
-      });
-
-      // Calculate new principal for next month
-      newPrincipal -= Math.round(monthlyDeposit - interestDue);
-    }
-
-    // Calculate total payable, principal payable, and interest charged
-    principalPayable = Math.round(principal);
-    interestCharged = schedule.reduce(
-      (acc, month) => acc + month.interestDue,
-      0
-    );
-    totalPayable = principalPayable + interestCharged;
-
-    // If there's a remaining balance in the last installment, create a new installment for it
-    if (schedule[period - 1]?.balance > 0) {
-      let remainingBalance = schedule[period - 1].balance;
-
-      let expectedDate = new Date(currentDate);
-      expectedDate.setMonth(expectedDate.getMonth() + period);
-
-      schedule.push({
-        installmentNumber: period + 1,
-        installmentAmount: remainingBalance,
-        principalDue: 0,
-        interestDue: 0,
-        balance: 0,
-        status: "PENDING",
-        dateExpected: expectedDate,
-      });
-    }
-
-    return {
-      schedule: schedule,
-      totalPayable: totalPayable,
-      principalPayable: principalPayable,
-      interestCharged: interestCharged,
-    };
-  } else if (paymentMethod === "INTEREST_ONLY") {
-    let newPrincipal = principal;
-    let currentDate = new Date();
-
-    // Add an initial installment with blank installmentAmount
-    schedule.push({
-      installmentNumber: 0,
-      installmentAmount: 0,
-      principalDue: principal,
-      interestDue: Math.round((monthlyRate / 100) * principal),
-      balance: principal + Math.round((monthlyRate / 100) * principal),
-      status: "PENDING",
-      dateExpected: currentDate,
-    });
-
-    for (let i = 1; i <= period; i++) {
-      let interestDue = Math.round((monthlyRate / 100) * newPrincipal);
-      let balance = newPrincipal;
-
-      let expectedDate = new Date(currentDate);
-      expectedDate.setMonth(expectedDate.getMonth() + i);
-
-      if (i < period) {
-        schedule.push({
-          installmentNumber: i,
-          installmentAmount: Math.round(interestDue),
-          principalDue: principal,
-          interestDue: interestDue,
-          balance: balance + interestDue,
-          status: "PENDING",
-          dateExpected: expectedDate,
-        });
-      } else {
-        schedule.push({
-          installmentNumber: i,
-          installmentAmount: Math.round(interestDue + newPrincipal),
-          principalDue: 0,
-          interestDue: 0,
-          balance: 0,
-          status: "PENDING",
-          dateExpected: expectedDate,
-        });
-      }
-    }
-
-    interestCharged = schedule.reduce(
-      (acc, month) =>
-        acc + (typeof month.interestDue === "number" ? month.interestDue : 0),
-      0
-    );
-
-    totalPayable = principal + interestCharged;
-
-    return {
-      schedule: schedule,
-      totalPayable: totalPayable,
-      principalPayable: principalPayable,
-      interestCharged: interestCharged,
-    };
-  }
-
-  return null;
-}
-
-function validateCalculateTermInputs(
-  amount: number,
-  interestRate: number,
-  monthlyPayment: number,
-  paymentMethod: PaymentMethod
-): boolean {
-  if (isNaN(amount) || amount <= 0) {
-    console.error("Invalid loan amount.");
-    return false;
-  }
-  if (isNaN(interestRate) || interestRate <= 0) {
-    console.error("Invalid interest rate.");
-    return false;
-  }
-  if (isNaN(monthlyPayment) || monthlyPayment <= 0) {
-    console.error("Invalid monthly payment.");
-    return false;
-  }
-  if (!["DECLINING_BALANCE", "INTEREST_ONLY"].includes(paymentMethod)) {
-    console.error(
-      'Invalid payment method. Use "DECLINING_BALANCE" or "INTEREST_ONLY".'
-    );
-    return false;
-  }
-  return true;
-}
-
-function term(
-  amount: number,
-  interestRate: number,
-  monthlyPayment: number,
-  paymentMethod: PaymentMethod
-): number {
-  if (
-    !validateCalculateTermInputs(
-      amount,
-      interestRate,
-      monthlyPayment,
-      paymentMethod
-    )
-  ) {
-    throw new Error("Invalid inputs provided.");
-  }
-
-  const monthlyInterestRate = interestRate / 100;
-  let balance = amount;
-  let term = 0;
-
-  if (paymentMethod === "DECLINING_BALANCE") {
-    while (balance > 0) {
-      const interest = balance * monthlyInterestRate;
-      const payment = Math.min(monthlyPayment, balance + interest);
-      balance -= payment - interest;
-      term++;
-
-      if (balance <= 0) break;
-    }
-  } else if (paymentMethod === "INTEREST_ONLY") {
-    const interestPayment = amount * monthlyInterestRate;
-
-    if (monthlyPayment <= interestPayment) {
-      // If the monthly payment is less than or equal to the interest payment,
-      // the balance will never decrease, leading to an infinite term.
-      throw new Error(
-        "Monthly payment must be greater than the interest payment for INTEREST_ONLY method."
+      const encryptedBuffer = crypto.publicEncrypt(
+        {
+          key: publicKeyPem,
+          padding: crypto.constants.RSA_PKCS1_PADDING,
+        },
+        Buffer.from(plainText, 'utf8')
       );
-    } else {
-      // Calculate how many payments will be needed to pay off the interest
-      // and then the principal with whatever is left from the monthly payment.
-      while (balance > 0) {
-        if (monthlyPayment > interestPayment) {
-          // Apply the remainder of the monthly payment towards the principal
-          balance -= monthlyPayment - interestPayment;
-          term++;
-        }
 
-        if (balance <= 0) break;
-      }
+      return encryptedBuffer.toString('base64');
+    } catch (err: any) {
+      throw new URAPrnError('ENCRYPTION_FAILED', err.message);
     }
-  } else {
-    throw new Error(
-      "Invalid payment method. Use 'DECLINING_BALANCE' or 'INTEREST_ONLY'."
-    );
   }
 
-  return term;
-}
+  generateSignature(textToSign: string): string {
+    try {
+      const pfxBuffer = fs.readFileSync(path.resolve(this.pfxPath));
+      let p12Asn1;
+      try {
+        p12Asn1 = forge.asn1.fromDer(pfxBuffer.toString('binary'), false);
+      } catch (e: any) {
+        throw new URAPrnError('KEYSTORE_LOAD_ERROR', e.message);
+      }
 
-export { daysToExpiry, lateDays, interestDue, paymentSchedule, term };
+      const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, this.keystorePassword);
+
+      let privateKey: forge.pki.PrivateKey | null = null;
+
+      p12.safeContents.forEach((content) => {
+        content.safeBags.forEach((bag) => {
+          if (
+            bag.type === forge.pki.oids.pkcs8ShroudedKeyBag &&
+            bag.key &&
+            (!this.alias || bag.attributes.friendlyName?.[0] === this.alias)
+          ) {
+            privateKey = bag.key;
+          }
+        });
+      });
+
+      if (!privateKey) {
+        throw new URAPrnError('PRIVATE_KEY_NOT_FOUND');
+      }
+
+      const md = forge.md.sha1.create();
+      md.update(textToSign, 'utf8');
+      const signature = (privateKey as forge.pki.rsa.PrivateKey).sign(md);
+
+      return Buffer.from(signature, 'binary').toString('base64');
+    } catch (err: any) {
+      if (err instanceof URAPrnError) throw err;
+      throw new URAPrnError('SIGNATURE_FAILED', err.message);
+    }
+  }
+
+  encryptAndSign(plainText: string): { encryption: string; signature: string } {
+    const encryption = this.encrypt(plainText);
+    const signature = this.generateSignature(encryption);
+    return { encryption, signature };
+  }
+}
