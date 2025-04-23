@@ -15,23 +15,23 @@ export interface URAPrnConfig {
  */
 export const URAError = {
   CERTIFICATE_LOAD_ERROR: {
-    code: 'URA001',
+    code: 'ERROR001',
     message: 'Failed to load or parse the certificate file.',
   },
   ENCRYPTION_FAILED: {
-    code: 'URA002',
+    code: 'ERROR002',
     message: 'Failed to encrypt the provided plaintext.',
   },
   KEYSTORE_LOAD_ERROR: {
-    code: 'URA003',
+    code: 'ERROR003',
     message: 'Failed to load or parse the PFX keystore.',
   },
   PRIVATE_KEY_NOT_FOUND: {
-    code: 'URA004',
+    code: 'ERROR004',
     message: 'Private key not found in keystore.',
   },
   SIGNATURE_FAILED: {
-    code: 'URA005',
+    code: 'ERROR005',
     message: 'Failed to generate digital signature.',
   },
 } as const;

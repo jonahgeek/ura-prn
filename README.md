@@ -40,7 +40,7 @@ const ura = new URAPrn({
   alias: 'ncdc',
 });
 
-const result = ura.encryptAndSign('NCDCNCDCPWD');
+const result = ura.encryptAndSign('YOURCREDENTIALS');
 
 console.log(result);
 // {
@@ -100,11 +100,11 @@ When something goes wrong, the library throws an error of type `URAPrnError` wit
 
 | Code     | Message                                         | When it happens |
 |----------|--------------------------------------------------|-----------------|
-| `URA001` | Failed to load or parse the certificate file.    | `.cer` file missing or malformed |
-| `URA002` | Failed to encrypt the provided plaintext.        | Public key encryption failed |
-| `URA003` | Failed to load or parse the PFX keystore.        | Bad password or corrupted `.pfx` |
-| `URA004` | Private key not found in keystore.               | No key found for alias |
-| `URA005` | Failed to generate digital signature.            | Signing operation failed |
+| `ERROR001` | Failed to load or parse the certificate file.    | `.cer` file missing or malformed |
+| `ERROR002` | Failed to encrypt the provided plaintext.        | Public key encryption failed |
+| `ERROR003` | Failed to load or parse the PFX keystore.        | Bad password or corrupted `.pfx` |
+| `ERROR004` | Private key not found in keystore.               | No key found for alias |
+| `ERROR005` | Failed to generate digital signature.            | Signing operation failed |
 
 ### Catching Errors Example
 
